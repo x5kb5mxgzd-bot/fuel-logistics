@@ -1,34 +1,110 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* DieselExpress Custom Styles */
+
+/* Hero section gradient overlay */
+.hero-overlay {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.7) 100%);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
+/* Card hover effects */
+.card-hover {
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Status badge styles */
+.status-pending {
+    @apply bg-amber-100 text-amber-800 border-amber-200;
+}
+
+.status-confirmed {
+    @apply bg-blue-100 text-blue-800 border-blue-200;
+}
+
+.status-in_delivery {
+    @apply bg-purple-100 text-purple-800 border-purple-200;
+}
+
+.status-delivered {
+    @apply bg-green-100 text-green-800 border-green-200;
+}
+
+.status-cancelled {
+    @apply bg-red-100 text-red-800 border-red-200;
+}
+
+/* Sidebar styles */
+.sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-all;
+}
+
+.sidebar-link.active {
+    @apply bg-amber-500 text-slate-900 font-semibold;
+}
+
+/* Form step indicator */
+.step-indicator {
+    @apply w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all;
+}
+
+.step-indicator.active {
+    @apply bg-amber-500 text-slate-900;
+}
+
+.step-indicator.completed {
+    @apply bg-green-500 text-white;
+}
+
+.step-indicator.inactive {
+    @apply bg-slate-200 text-slate-500;
+}
+
+/* Price display */
+.price-display {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+/* Animation for loading states */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
     }
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.shimmer {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
 }
 
-.App-link {
-    color: #61dafb;
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .mobile-menu-overlay {
+        @apply fixed inset-0 bg-black/50 z-40;
+    }
+    
+    .mobile-sidebar {
+        @apply fixed left-0 top-0 h-full w-64 bg-white z-50 transform transition-transform;
+    }
+    
+    .mobile-sidebar.hidden {
+        @apply -translate-x-full;
+    }
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Toast customization */
+.toast-success {
+    @apply bg-green-50 border-green-200 text-green-800;
+}
+
+.toast-error {
+    @apply bg-red-50 border-red-200 text-red-800;
 }
