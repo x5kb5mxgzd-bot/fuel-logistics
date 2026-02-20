@@ -1,0 +1,111 @@
+{
+  "brand_identity": {
+    "name": "DieselExpress",
+    "tone": "Industrial, Reliable, Efficient, French",
+    "typography": {
+      "headings": {
+        "font_family": "Barlow Condensed, sans-serif",
+        "weight": "700",
+        "letter_spacing": "tracking-tight",
+        "import_url": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&display=swap"
+      },
+      "body": {
+        "font_family": "Inter, sans-serif",
+        "weight": "400",
+        "letter_spacing": "tracking-normal"
+      }
+    },
+    "colors": {
+      "primary": {
+        "name": "Oil Navy",
+        "hex": "#0F172A",
+        "tailwind": "slate-900"
+      },
+      "accent": {
+        "name": "Fuel Amber",
+        "hex": "#F59E0B",
+        "tailwind": "amber-500"
+      },
+      "background": {
+        "light": "#F8FAFC",
+        "dark": "#020617"
+      },
+      "success": "#16A34A",
+      "warning": "#EA580C",
+      "error": "#DC2626"
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_truck": "https://images.unsplash.com/photo-1708008914410-fc368c747e87?q=85&w=1920&auto=format&fit=crop",
+      "fleet_manager": "https://images.unsplash.com/photo-1659353587228-5dbbebb5d98f?q=85&w=800&auto=format&fit=crop",
+      "delivery_action": "https://images.unsplash.com/photo-1645888921404-604ed47d6be1?q=85&w=1200&auto=format&fit=crop",
+      "industrial_site": "https://images.unsplash.com/photo-1660316806126-ec9a53892bde?q=85&w=1200&auto=format&fit=crop"
+    },
+    "icons": {
+      "library": "lucide-react",
+      "preferred_style": "stroke-width={1.5}"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-slate-900 text-white hover:bg-slate-800 rounded-sm font-semibold tracking-wide uppercase px-6 py-3 shadow-md transition-all",
+      "accent": "bg-amber-500 text-slate-900 hover:bg-amber-400 rounded-sm font-bold tracking-wide uppercase px-6 py-3 shadow-md transition-transform hover:-translate-y-0.5",
+      "outline": "border-2 border-slate-200 text-slate-700 hover:border-slate-900 hover:text-slate-900 rounded-sm font-medium uppercase tracking-wide"
+    },
+    "cards": {
+      "style": "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm hover:shadow-md transition-shadow",
+      "padding": "p-6"
+    },
+    "inputs": {
+      "style": "h-12 rounded-sm border-slate-300 focus:border-amber-500 focus:ring-amber-500 bg-slate-50"
+    }
+  },
+  "layout_strategies": {
+    "landing_page": {
+      "hero": {
+        "type": "Split Asymmetric",
+        "description": "Left 60% text/CTA, Right 40% Image. Strong headline in Barlow Condensed.",
+        "bg_class": "bg-slate-50"
+      },
+      "features": {
+        "type": "Bento Grid",
+        "grid_class": "grid grid-cols-1 md:grid-cols-3 gap-6",
+        "items": [
+          "col-span-1 md:col-span-2 bg-slate-900 text-white p-8 rounded-xl",
+          "col-span-1 bg-amber-500 text-slate-900 p-8 rounded-xl",
+          "col-span-1 md:col-span-3 bg-white border border-slate-200 p-8 rounded-xl"
+        ]
+      }
+    },
+    "dashboard": {
+      "layout": "Sidebar Navigation (Fixed Left)",
+      "content_area": "bg-slate-50 min-h-screen p-8",
+      "grid": "grid grid-cols-1 md:grid-cols-4 gap-6",
+      "widgets": {
+        "summary": "col-span-1 h-32",
+        "main_chart": "col-span-1 md:col-span-3 row-span-2 h-96",
+        "recent_orders": "col-span-1 md:col-span-2 row-span-2"
+      }
+    }
+  },
+  "universal_guidelines": [
+    "Use 'Barlow Condensed' for all headings (h1-h3).",
+    "Use 'Inter' for body text and UI elements.",
+    "Primary CTA buttons must always be Amber-500 or Slate-900.",
+    "Forms must use high-contrast inputs with clear labels.",
+    "Dashboard must distinguish clearly between 'Pro' (Dense data) and 'Particulier' (Simple view).",
+    "All price displays must be large and bold.",
+    "Status badges: Pending (Yellow/Amber), Confirmed (Blue), Delivering (Purple), Delivered (Green)."
+  ],
+  "instructions_to_main_agent": [
+    "1. Setup: Install fonts (Barlow Condensed) in index.html or CSS.",
+    "2. Theme: Implement the color palette in tailwind.config.js specifically extending 'colors'.",
+    "3. Auth: Create a split login screen (Left: Branding/Image, Right: Form).",
+    "4. Dashboard: Build the Sidebar component first, then the Layout wrapper.",
+    "5. Order Form: Use a 'Step Wizard' pattern (Step 1: Quantity/Type, Step 2: Address, Step 3: Date, Step 4: Review).",
+    "6. Interactive: Use Framer Motion for slight hover lifts on cards and step transitions.",
+    "7. Mobile: Ensure the order form is full-width and touch-friendly on mobile.",
+    "8. Language: ENSURE ALL TEXT IS IN FRENCH."
+  ]
+}
