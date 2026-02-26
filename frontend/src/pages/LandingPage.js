@@ -53,8 +53,8 @@ const LandingPage = () => {
                 <span className="text-amber-500">DIRECTEMENT CHEZ VOUS</span>
               </h1>
               <p className="text-lg sm:text-xl text-slate-300 mb-8 max-w-xl">
-                Service professionnel de livraison de carburant pour les entreprises et les particuliers. 
-                Minimum 20 litres, livraison rapide et fiable.
+                Service professionnel de livraison de carburant pour les entreprises et les particuliers sur <span className="text-amber-500 font-semibold">Tours et ses alentours</span>. 
+                Minimum 20 litres pour les particuliers, livraison rapide et fiable.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link to="/register">
@@ -103,7 +103,7 @@ const LandingPage = () => {
               POURQUOI CHOISIR DIESELEXPRESS ?
             </h2>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Un service de livraison de carburant conçu pour répondre aux besoins des professionnels et particuliers.
+              Un service de livraison de carburant sur Tours et ses alentours, conçu pour répondre aux besoins des professionnels et particuliers.
             </p>
           </div>
 
@@ -229,7 +229,7 @@ const LandingPage = () => {
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-center gap-2 text-slate-800">
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
-                    Minimum 20 litres
+                    <strong>Minimum 20 litres</strong>
                   </li>
                   <li className="flex items-center gap-2 text-slate-800">
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
@@ -241,7 +241,7 @@ const LandingPage = () => {
                   </li>
                   <li className="flex items-center gap-2 text-slate-800">
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
-                    Historique des commandes
+                    Tours et alentours (37)
                   </li>
                 </ul>
                 <p className="text-sm text-green-700 text-center font-semibold">
@@ -289,7 +289,7 @@ const LandingPage = () => {
                 </span>
               </div>
               <p className="text-slate-400">
-                Votre partenaire de confiance pour la livraison de carburant diesel.
+                Votre partenaire de confiance pour la livraison de carburant diesel sur Tours et ses alentours.
               </p>
             </div>
             <div>
@@ -305,7 +305,7 @@ const LandingPage = () => {
                 </p>
                 <p className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
-                  Paris, France
+                  Tours et alentours (37)
                 </p>
               </div>
             </div>
