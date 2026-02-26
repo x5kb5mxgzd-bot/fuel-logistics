@@ -304,9 +304,9 @@ const OrderDetail = () => {
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <Button
-              variant="outline"
+              variant="ghost"
               className="flex-1 h-12 border-slate-200"
-              onClick={() => window.open("tel:+33123456789")}
+              onClick={() => window.open("tel:+33609883250")}
             >
               <Phone className="h-5 w-5 mr-2" />
               Contacter le support

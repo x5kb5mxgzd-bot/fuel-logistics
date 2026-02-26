@@ -46,7 +46,7 @@ const DashboardLayout = () => {
           <div className="flex items-center gap-2">
             <Fuel className="h-7 w-7 text-amber-500" />
             <span className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-              DIESELEXPRESS
+              ALIA REFUEL
             </span>
           </div>
           <Button

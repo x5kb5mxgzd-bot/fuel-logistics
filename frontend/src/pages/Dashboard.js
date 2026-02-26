@@ -75,7 +75,7 @@ const Dashboard = () => {
             Bonjour, {user?.full_name?.split(" ")[0]} !
           </h1>
           <p className="text-slate-600 mt-1">
-            Bienvenue sur votre espace DieselExpress
+            Bienvenue sur votre espace Alia Refuel
           </p>
         </div>
         <Link to="/dashboard/new-order">

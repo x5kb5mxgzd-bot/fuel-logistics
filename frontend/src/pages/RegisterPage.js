@@ -80,7 +80,7 @@ const RegisterPage = () => {
           <Link to="/" className="flex items-center gap-2">
             <Fuel className="h-10 w-10 text-amber-500" />
             <span className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-              DIESELEXPRESS
+              ALIA REFUEL
             </span>
           </Link>
         </div>
@@ -90,7 +90,7 @@ const RegisterPage = () => {
             style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
           >
             REJOIGNEZ<br />
-            <span className="text-amber-500">DIESELEXPRESS</span>
+            <span className="text-amber-500">ALIA REFUEL</span>
           </h1>
           <p className="text-slate-300 text-lg max-w-md">
             Créez votre compte et commencez à commander votre carburant en quelques clics.
@@ -107,7 +107,7 @@ const RegisterPage = () => {
           </div>
         </div>
         <div className="relative text-slate-400 text-sm">
-          &copy; 2024 DieselExpress. Tous droits réservés.
+          &copy; 2024 Alia Refuel. Tous droits réservés.
         </div>
       </div>
 
@@ -127,7 +127,7 @@ const RegisterPage = () => {
               <div className="flex items-center gap-2 lg:hidden mb-4">
                 <Fuel className="h-8 w-8 text-amber-500" />
                 <span className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                  DIESELEXPRESS
+                  ALIA REFUEL
                 </span>
               </div>
               <CardTitle className="text-2xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>

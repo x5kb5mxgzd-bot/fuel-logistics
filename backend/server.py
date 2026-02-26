@@ -26,7 +26,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'diesel-express-secret-key-2024')
 JWT_ALGORITHM = "HS256"
 
 # Create the main app
-app = FastAPI(title="DieselExpress API")
+app = FastAPI(title="Alia Refuel API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -337,7 +337,7 @@ async def get_pricing():
 
 @api_router.get("/")
 async def root():
-    return {"message": "DieselExpress API v1.0", "status": "running"}
+    return {"message": "Alia Refuel API v1.0", "status": "running"}
 
 # Include the router in the main app
 app.include_router(api_router)
