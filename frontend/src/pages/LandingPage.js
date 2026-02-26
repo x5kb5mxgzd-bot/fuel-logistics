@@ -13,7 +13,7 @@ const LandingPage = () => {
             <div className="flex items-center gap-2">
               <Fuel className="h-8 w-8 text-amber-500" />
               <span className="text-2xl font-bold tracking-tight" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                DIESELEXPRESS
+                ALIA REFUEL
               </span>
             </div>
             <div className="flex items-center gap-4">
@@ -100,7 +100,7 @@ const LandingPage = () => {
               className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4"
               style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
             >
-              POURQUOI CHOISIR DIESELEXPRESS ?
+              POURQUOI CHOISIR ALIA REFUEL ?
             </h2>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
               Un service de livraison de carburant sur Tours et ses alentours, conçu pour répondre aux besoins des professionnels et particuliers.
@@ -285,7 +285,7 @@ const LandingPage = () => {
               <div className="flex items-center gap-2 mb-4">
                 <Fuel className="h-8 w-8 text-amber-500" />
                 <span className="text-2xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                  DIESELEXPRESS
+                  ALIA REFUEL
                 </span>
               </div>
               <p className="text-slate-400">
@@ -297,11 +297,11 @@ const LandingPage = () => {
               <div className="space-y-2 text-slate-400">
                 <p className="flex items-center gap-2">
                   <Phone className="h-4 w-4" />
-                  01 23 45 67 89
+                  06 09 88 32 50
                 </p>
                 <p className="flex items-center gap-2">
                   <Mail className="h-4 w-4" />
-                  contact@dieselexpress.fr
+                  aliarefuel@gmail.com
                 </p>
                 <p className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
@@ -318,7 +318,7 @@ const LandingPage = () => {
             </div>
           </div>
           <div className="border-t border-slate-800 mt-8 pt-8 text-center text-slate-500">
-            <p>&copy; 2024 DieselExpress. Tous droits réservés.</p>
+            <p>&copy; 2024 Alia Refuel. Tous droits réservés.</p>
           </div>
         </div>
       </footer>

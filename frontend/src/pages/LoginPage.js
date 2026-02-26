@@ -55,7 +55,7 @@ const LoginPage = () => {
           <Link to="/" className="flex items-center gap-2">
             <Fuel className="h-10 w-10 text-amber-500" />
             <span className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-              DIESELEXPRESS
+              ALIA REFUEL
             </span>
           </Link>
         </div>
@@ -72,7 +72,7 @@ const LoginPage = () => {
           </p>
         </div>
         <div className="relative text-slate-400 text-sm">
-          &copy; 2024 DieselExpress. Tous droits réservés.
+          &copy; 2024 Alia Refuel. Tous droits réservés.
         </div>
       </div>
 
@@ -92,7 +92,7 @@ const LoginPage = () => {
               <div className="flex items-center gap-2 lg:hidden mb-4">
                 <Fuel className="h-8 w-8 text-amber-500" />
                 <span className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                  DIESELEXPRESS
+                  ALIA REFUEL
                 </span>
               </div>
               <CardTitle className="text-2xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
