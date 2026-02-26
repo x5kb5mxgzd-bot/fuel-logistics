@@ -251,13 +251,21 @@ const NewOrder = () => {
               {/* Price Preview */}
               <div className="bg-slate-50 rounded-xl p-6 mt-6">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="text-slate-600">Prix du carburant</span>
+                  <span className="text-slate-600">Prix du carburant ({formData.quantity}L × {pricing.price_per_liter}€)</span>
                   <span className="font-semibold">{prices.fuelPrice.toFixed(2)}€</span>
                 </div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-slate-600">Frais de livraison</span>
-                  <span className="font-semibold">{prices.deliveryFee.toFixed(2)}€</span>
-                </div>
+                {prices.deliveryFee > 0 && (
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-slate-600">Frais de livraison</span>
+                    <span className="font-semibold">{prices.deliveryFee.toFixed(2)}€</span>
+                  </div>
+                )}
+                {prices.deliveryFee === 0 && (
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-slate-600">Livraison</span>
+                    <span className="font-semibold text-green-600">Gratuite</span>
+                  </div>
+                )}
                 <div className="border-t border-slate-200 pt-3 mt-3">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold text-slate-900">Total estimé</span>
@@ -494,10 +502,18 @@ const NewOrder = () => {
                     <span className="text-slate-600">Carburant ({formData.quantity}L × {pricing.price_per_liter}€)</span>
                     <span className="font-semibold">{prices.fuelPrice.toFixed(2)}€</span>
                   </div>
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-slate-600">Frais de livraison</span>
-                    <span className="font-semibold">{prices.deliveryFee.toFixed(2)}€</span>
-                  </div>
+                  {prices.deliveryFee > 0 && (
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-slate-600">Frais de livraison</span>
+                      <span className="font-semibold">{prices.deliveryFee.toFixed(2)}€</span>
+                    </div>
+                  )}
+                  {prices.deliveryFee === 0 && (
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-slate-600">Livraison</span>
+                      <span className="font-semibold text-green-600">Gratuite</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center pt-4 border-t border-slate-300">
                     <span className="text-xl font-bold text-slate-900">Total à payer</span>
                     <span 

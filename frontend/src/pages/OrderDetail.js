@@ -270,10 +270,18 @@ const OrderDetail = () => {
               <span className="text-slate-600">Carburant ({order.quantity}L)</span>
               <span className="font-semibold">{order.price_fuel.toFixed(2)}€</span>
             </div>
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-slate-600">Frais de livraison</span>
-              <span className="font-semibold">{order.delivery_fee.toFixed(2)}€</span>
-            </div>
+            {order.delivery_fee > 0 && (
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-slate-600">Frais de livraison</span>
+                <span className="font-semibold">{order.delivery_fee.toFixed(2)}€</span>
+              </div>
+            )}
+            {order.delivery_fee === 0 && (
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-slate-600">Livraison</span>
+                <span className="font-semibold text-green-600">Gratuite</span>
+              </div>
+            )}
             <div className="flex justify-between items-center pt-4 border-t border-slate-200">
               <span className="text-xl font-bold text-slate-900">Total</span>
               <span 
