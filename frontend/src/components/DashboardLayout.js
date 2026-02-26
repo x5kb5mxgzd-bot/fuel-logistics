@@ -80,7 +80,7 @@ const DashboardLayout = () => {
             <Link to="/" className="flex items-center gap-2">
               <Fuel className="h-8 w-8 text-amber-500" />
               <span className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                DIESELEXPRESS
+                ALIA REFUEL
               </span>
             </Link>
           </div>
