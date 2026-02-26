@@ -41,8 +41,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Diesel price per liter (in euros)
-DIESEL_PRICE_PER_LITER = 1.85
-DELIVERY_FEE = 15.00
+DIESEL_PRICE_PER_LITER = 1.80
+DELIVERY_FEE = 0.00
 MINIMUM_QUANTITY = 20
 
 # ==================== MODELS ====================

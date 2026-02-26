@@ -184,7 +184,7 @@ const LandingPage = () => {
               </div>
               <CardContent className="p-6">
                 <div className="text-center mb-6">
-                  <span className="text-5xl font-bold text-amber-500 price-display">1,85€</span>
+                  <span className="text-5xl font-bold text-amber-500 price-display">1,80€</span>
                   <span className="text-slate-600">/litre</span>
                 </div>
                 <ul className="space-y-3 mb-6">
@@ -205,8 +205,8 @@ const LandingPage = () => {
                     Suivi détaillé
                   </li>
                 </ul>
-                <p className="text-sm text-slate-500 text-center">
-                  + 15€ de frais de livraison
+                <p className="text-sm text-green-600 text-center font-semibold">
+                  Livraison gratuite
                 </p>
               </CardContent>
             </Card>
@@ -223,7 +223,7 @@ const LandingPage = () => {
               </div>
               <CardContent className="p-6">
                 <div className="text-center mb-6">
-                  <span className="text-5xl font-bold text-slate-900 price-display">1,85€</span>
+                  <span className="text-5xl font-bold text-slate-900 price-display">1,80€</span>
                   <span className="text-slate-800">/litre</span>
                 </div>
                 <ul className="space-y-3 mb-6">
@@ -244,8 +244,8 @@ const LandingPage = () => {
                     Historique des commandes
                   </li>
                 </ul>
-                <p className="text-sm text-slate-700 text-center">
-                  + 15€ de frais de livraison
+                <p className="text-sm text-green-700 text-center font-semibold">
+                  Livraison gratuite
                 </p>
               </CardContent>
             </Card>

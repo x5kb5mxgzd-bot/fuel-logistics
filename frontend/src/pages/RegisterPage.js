@@ -97,7 +97,7 @@ const RegisterPage = () => {
           </p>
           <div className="mt-8 grid grid-cols-2 gap-4">
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-amber-500 text-2xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>1,85€</p>
+              <p className="text-amber-500 text-2xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>1,80€</p>
               <p className="text-slate-300 text-sm">par litre</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
