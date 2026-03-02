@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
@@ -12,6 +13,7 @@ import uuid
 from datetime import datetime, timezone
 import bcrypt
 import jwt
+import resend
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -24,6 +26,11 @@ db = client[os.environ['DB_NAME']]
 # JWT Configuration
 JWT_SECRET = os.environ.get('JWT_SECRET', 'diesel-express-secret-key-2024')
 JWT_ALGORITHM = "HS256"
+
+# Resend Configuration
+resend.api_key = os.environ.get('RESEND_API_KEY', '')
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'aliarefuel@gmail.com')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 
 # Create the main app
 app = FastAPI(title="Alia Refuel API")
@@ -214,6 +221,105 @@ async def login(credentials: UserLogin):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(**current_user)
 
+# ==================== EMAIL HELPERS ====================
+
+async def send_order_notification_email(order: dict, customer: dict):
+    """Send email notification to admin when new order is placed"""
+    try:
+        # Format date nicely
+        date_str = order['delivery_date']
+        time_slot = order['delivery_time_slot'].replace('-', ' - ')
+        
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #0F172A; padding: 20px; text-align: center;">
+                <h1 style="color: #F59E0B; margin: 0;">⛽ Nouvelle Commande Alia Refuel</h1>
+            </div>
+            
+            <div style="background-color: #f8fafc; padding: 20px; border: 1px solid #e2e8f0;">
+                <h2 style="color: #0F172A; border-bottom: 2px solid #F59E0B; padding-bottom: 10px;">
+                    Commande #{order['id'][:8].upper()}
+                </h2>
+                
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>👤 Client :</strong>
+                        </td>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            {customer['full_name']}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>📞 Téléphone :</strong>
+                        </td>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            {customer['phone']}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>📧 Email :</strong>
+                        </td>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            {customer['email']}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>⛽ Quantité :</strong>
+                        </td>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <span style="font-size: 18px; font-weight: bold; color: #F59E0B;">{order['quantity']} litres</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>💰 Total :</strong>
+                        </td>
+                        <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">
+                            <span style="font-size: 20px; font-weight: bold; color: #0F172A;">{order['total_price']:.2f}€</span>
+                        </td>
+                    </tr>
+                </table>
+                
+                <div style="background-color: #0F172A; color: white; padding: 15px; margin-top: 20px; border-radius: 8px;">
+                    <h3 style="color: #F59E0B; margin-top: 0;">📍 Adresse de livraison</h3>
+                    <p style="margin: 5px 0;">{order['delivery_address']}</p>
+                    <p style="margin: 5px 0;">{order['delivery_postal_code']} {order['delivery_city']}</p>
+                </div>
+                
+                <div style="background-color: #F59E0B; color: #0F172A; padding: 15px; margin-top: 15px; border-radius: 8px;">
+                    <h3 style="margin-top: 0;">📅 Date & Heure</h3>
+                    <p style="margin: 5px 0; font-size: 18px; font-weight: bold;">{date_str}</p>
+                    <p style="margin: 5px 0;">🕐 {time_slot}</p>
+                </div>
+                
+                {f'<div style="background-color: #f1f5f9; padding: 15px; margin-top: 15px; border-radius: 8px; border-left: 4px solid #F59E0B;"><strong>📝 Instructions :</strong><p style="margin: 5px 0;">{order["notes"]}</p></div>' if order.get('notes') else ''}
+            </div>
+            
+            <div style="text-align: center; padding: 20px; color: #64748b; font-size: 12px;">
+                <p>Alia Refuel - Livraison de diesel sur Tours et ses alentours</p>
+            </div>
+        </div>
+        """
+        
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [ADMIN_EMAIL],
+            "subject": f"🛢️ Nouvelle commande #{order['id'][:8].upper()} - {order['quantity']}L - {customer['full_name']}",
+            "html": html_content
+        }
+        
+        # Send email in background (non-blocking)
+        await asyncio.to_thread(resend.Emails.send, params)
+        logger.info(f"Email notification sent for order {order['id']}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send email notification: {str(e)}")
+        # Don't raise exception - order should still be created even if email fails
+
 # ==================== ORDER ROUTES ====================
 
 @api_router.post("/orders", response_model=OrderResponse)
@@ -243,6 +349,9 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
     }
     
     await db.orders.insert_one(order_doc)
+    
+    # Send email notification to admin
+    await send_order_notification_email(order_doc, current_user)
     
     return OrderResponse(**order_doc)
 
