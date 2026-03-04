@@ -118,7 +118,7 @@ const LandingPage = () => {
                   LIVRAISON RAPIDE
                 </h3>
                 <p className="text-slate-600">
-                  Recevez votre carburant dans la journée suivant votre commande.
+                  Recevez votre carburant en moins de 12h suivant votre commande.
                 </p>
               </CardContent>
             </Card>

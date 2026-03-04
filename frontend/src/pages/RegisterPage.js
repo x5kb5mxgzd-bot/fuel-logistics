@@ -101,7 +101,7 @@ const RegisterPage = () => {
               <p className="text-slate-300 text-sm">par litre</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-amber-500 text-2xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>Même jour</p>
+              <p className="text-amber-500 text-2xl font-bold" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>12H</p>
               <p className="text-slate-300 text-sm">livraison rapide</p>
             </div>
           </div>
