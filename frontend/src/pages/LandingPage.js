@@ -37,7 +37,7 @@ const LandingPage = () => {
         <div 
           className="absolute inset-0 opacity-30"
           style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1768393775846-6d0bd756a847?q=85&w=1920&auto=format&fit=crop)',
+            backgroundImage: 'url(https://images.pexels.com/photos/11601286/pexels-photo-11601286.jpeg?auto=compress&cs=tinysrgb&w=1920)',
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
@@ -82,7 +82,7 @@ const LandingPage = () => {
               <div className="relative">
                 <div className="absolute -inset-4 bg-amber-500/20 rounded-2xl blur-2xl"></div>
                 <img 
-                  src="https://images.unsplash.com/photo-1768400554801-2002b63e0591?q=85&w=600&auto=format&fit=crop"
+                  src="https://images.pexels.com/photos/11601286/pexels-photo-11601286.jpeg?auto=compress&cs=tinysrgb&w=600"
                   alt="Livraison de carburant"
                   className="relative rounded-xl shadow-2xl w-full max-w-md mx-auto"
                 />
