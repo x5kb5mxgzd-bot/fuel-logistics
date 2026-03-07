@@ -221,6 +221,13 @@ async def login(credentials: UserLogin):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return UserResponse(**current_user)
 
+# Zone de livraison autorisée (codes postaux)
+ALLOWED_POSTAL_CODES_PREFIX = ["37"]  # Indre-et-Loire
+
+def is_delivery_zone_valid(postal_code: str) -> bool:
+    """Check if postal code is in delivery zone"""
+    return any(postal_code.startswith(prefix) for prefix in ALLOWED_POSTAL_CODES_PREFIX)
+
 # ==================== EMAIL HELPERS ====================
 
 async def send_order_notification_email(order: dict, customer: dict):
@@ -324,6 +331,13 @@ async def send_order_notification_email(order: dict, customer: dict):
 
 @api_router.post("/orders", response_model=OrderResponse)
 async def create_order(order_data: OrderCreate, current_user: dict = Depends(get_current_user)):
+    # Vérifier la zone de livraison
+    if not is_delivery_zone_valid(order_data.delivery_postal_code):
+        raise HTTPException(
+            status_code=400, 
+            detail="Désolé, nous ne livrons pas dans cette zone. Nous livrons uniquement en Indre-et-Loire (37)."
+        )
+    
     order_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     
