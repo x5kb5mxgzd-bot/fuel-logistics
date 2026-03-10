@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
 import resend
@@ -554,6 +554,167 @@ async def get_payment_config():
         "merchant_code": SUMUP_MERCHANT_CODE,
         "currency": "EUR"
     }
+
+# ==================== PLANNING / DELIVERY ROUTES ====================
+
+@api_router.get("/planning/tomorrow")
+async def get_tomorrow_planning():
+    """Get all confirmed orders for tomorrow - for delivery planning"""
+    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
+    tomorrow_str = tomorrow.strftime("%Y-%m-%d")
+    
+    orders = await db.orders.find(
+        {
+            "delivery_date": tomorrow_str,
+            "payment_status": "paid",
+            "status": {"$nin": ["cancelled", "delivered"]}
+        },
+        {"_id": 0}
+    ).sort("delivery_time_slot", 1).to_list(100)
+    
+    # Group by time slot
+    by_slot = {}
+    for order in orders:
+        slot = order.get("delivery_time_slot", "Non défini")
+        if slot not in by_slot:
+            by_slot[slot] = []
+        by_slot[slot].append(order)
+    
+    return {
+        "date": tomorrow_str,
+        "total_orders": len(orders),
+        "total_liters": sum(o["quantity"] for o in orders),
+        "orders_by_slot": by_slot,
+        "orders": orders
+    }
+
+@api_router.post("/planning/send-email")
+async def send_planning_email():
+    """Send tomorrow's planning email to the driver"""
+    tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
+    tomorrow_str = tomorrow.strftime("%Y-%m-%d")
+    tomorrow_formatted = tomorrow.strftime("%d/%m/%Y")
+    
+    orders = await db.orders.find(
+        {
+            "delivery_date": tomorrow_str,
+            "payment_status": "paid",
+            "status": {"$nin": ["cancelled", "delivered"]}
+        },
+        {"_id": 0}
+    ).sort("delivery_time_slot", 1).to_list(100)
+    
+    if not orders:
+        return {"message": "Aucune livraison prévue pour demain", "orders_count": 0}
+    
+    # Group by time slot
+    by_slot = {}
+    for order in orders:
+        slot = order.get("delivery_time_slot", "Non défini")
+        if slot not in by_slot:
+            by_slot[slot] = []
+        by_slot[slot].append(order)
+    
+    total_liters = sum(o["quantity"] for o in orders)
+    total_revenue = sum(o["total_price"] for o in orders)
+    
+    # Build email HTML
+    orders_html = ""
+    for slot, slot_orders in sorted(by_slot.items()):
+        slot_label = slot.replace("-", "h - ") + "h"
+        orders_html += f"""
+        <div style="margin-bottom: 30px;">
+            <h3 style="background-color: #F59E0B; color: #0F172A; padding: 10px 15px; margin: 0; border-radius: 8px 8px 0 0;">
+                🕐 {slot_label} ({len(slot_orders)} livraison{"s" if len(slot_orders) > 1 else ""})
+            </h3>
+        """
+        for order in slot_orders:
+            # Get customer info
+            user = await db.users.find_one({"id": order["user_id"]}, {"_id": 0})
+            customer_name = user.get("full_name", "Client") if user else "Client"
+            customer_phone = user.get("phone", "N/A") if user else "N/A"
+            
+            orders_html += f"""
+            <div style="background-color: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-top: none;">
+                <table style="width: 100%;">
+                    <tr>
+                        <td style="width: 60%;">
+                            <strong style="font-size: 16px;">👤 {customer_name}</strong><br>
+                            <span style="color: #64748b;">📞 {customer_phone}</span>
+                        </td>
+                        <td style="text-align: right;">
+                            <strong style="font-size: 20px; color: #F59E0B;">⛽ {order['quantity']}L</strong><br>
+                            <span style="color: #0F172A; font-weight: bold;">{order['total_price']:.2f}€</span>
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">
+                    <strong>📍 Adresse :</strong><br>
+                    {order['delivery_address']}<br>
+                    {order['delivery_postal_code']} {order['delivery_city']}
+                </div>
+                {f"<div style='margin-top: 10px; padding: 10px; background-color: #fef3c7; border-radius: 4px;'><strong>📝 Note :</strong> {order['notes']}</div>" if order.get('notes') else ""}
+            </div>
+            """
+        orders_html += "</div>"
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+        <div style="background-color: #0F172A; padding: 20px; text-align: center;">
+            <h1 style="color: #F59E0B; margin: 0;">📋 PLANNING LIVRAISONS</h1>
+            <p style="color: white; margin: 10px 0 0 0; font-size: 18px;">{tomorrow_formatted}</p>
+        </div>
+        
+        <div style="background-color: #F59E0B; padding: 15px; text-align: center;">
+            <table style="width: 100%; color: #0F172A;">
+                <tr>
+                    <td style="text-align: center;">
+                        <strong style="font-size: 24px;">{len(orders)}</strong><br>
+                        <span>livraisons</span>
+                    </td>
+                    <td style="text-align: center;">
+                        <strong style="font-size: 24px;">{total_liters}L</strong><br>
+                        <span>total</span>
+                    </td>
+                    <td style="text-align: center;">
+                        <strong style="font-size: 24px;">{total_revenue:.2f}€</strong><br>
+                        <span>CA</span>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        
+        <div style="padding: 20px;">
+            {orders_html}
+        </div>
+        
+        <div style="background-color: #0F172A; padding: 15px; text-align: center; color: #94a3b8; font-size: 12px;">
+            <p>Alia Refuel - Planning généré automatiquement</p>
+        </div>
+    </div>
+    """
+    
+    try:
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [ADMIN_EMAIL],
+            "subject": f"📋 Planning livraisons du {tomorrow_formatted} - {len(orders)} livraison{'s' if len(orders) > 1 else ''} - {total_liters}L",
+            "html": html_content
+        }
+        
+        await asyncio.to_thread(resend.Emails.send, params)
+        logger.info(f"Planning email sent for {tomorrow_str}")
+        
+        return {
+            "message": "Planning envoyé par email",
+            "date": tomorrow_str,
+            "orders_count": len(orders),
+            "total_liters": total_liters
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to send planning email: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'envoi de l'email")
 
 # ==================== STATS ROUTES ====================
 
