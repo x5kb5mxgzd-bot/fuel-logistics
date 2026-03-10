@@ -404,6 +404,88 @@ async def send_order_notification_email(order: dict, customer: dict):
         logger.error(f"Failed to send email notification: {str(e)}")
         # Don't raise exception - order should still be created even if email fails
 
+
+async def send_customer_confirmation_email(order: dict, customer: dict):
+    """Send confirmation email to customer after payment"""
+    try:
+        date_str = order['delivery_date']
+        time_slot = order['delivery_time_slot'].replace('-', ' - ')
+        
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background-color: #0F172A; padding: 30px; text-align: center;">
+                <h1 style="color: #F59E0B; margin: 0; font-size: 28px;">✅ Commande Confirmée !</h1>
+                <p style="color: white; margin: 10px 0 0 0;">Merci pour votre confiance</p>
+            </div>
+            
+            <div style="padding: 30px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #334155;">
+                    Bonjour <strong>{customer['full_name']}</strong>,
+                </p>
+                <p style="font-size: 16px; color: #334155;">
+                    Votre commande de diesel a bien été enregistrée et payée. Voici le récapitulatif :
+                </p>
+                
+                <div style="background-color: #f8fafc; border-radius: 12px; padding: 25px; margin: 25px 0;">
+                    <h2 style="color: #0F172A; margin-top: 0; border-bottom: 2px solid #F59E0B; padding-bottom: 10px;">
+                        Commande #{order['id'][:8].upper()}
+                    </h2>
+                    
+                    <table style="width: 100%;">
+                        <tr>
+                            <td style="padding: 12px 0; color: #64748b;">Quantité</td>
+                            <td style="padding: 12px 0; text-align: right; font-weight: bold; font-size: 18px; color: #F59E0B;">
+                                ⛽ {order['quantity']} litres
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px 0; color: #64748b;">Total payé</td>
+                            <td style="padding: 12px 0; text-align: right; font-weight: bold; font-size: 20px; color: #0F172A;">
+                                {order['total_price']:.2f}€
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div style="background-color: #0F172A; border-radius: 12px; padding: 25px; margin: 25px 0; color: white;">
+                    <h3 style="color: #F59E0B; margin-top: 0;">📍 Livraison prévue</h3>
+                    <p style="margin: 8px 0; font-size: 18px; font-weight: bold;">{date_str}</p>
+                    <p style="margin: 8px 0;">🕐 Entre {time_slot}</p>
+                    <hr style="border: none; border-top: 1px solid #334155; margin: 15px 0;">
+                    <p style="margin: 8px 0;">{order['delivery_address']}</p>
+                    <p style="margin: 8px 0;">{order['delivery_postal_code']} {order['delivery_city']}</p>
+                </div>
+                
+                <div style="background-color: #fef3c7; border-radius: 12px; padding: 20px; margin: 25px 0;">
+                    <p style="margin: 0; color: #92400e;">
+                        <strong>📞 Une question ?</strong><br>
+                        Contactez-nous au <strong>06 09 88 32 50</strong>
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background-color: #0F172A; padding: 20px; text-align: center;">
+                <p style="color: #F59E0B; font-weight: bold; margin: 0;">ALIA REFUEL</p>
+                <p style="color: #94a3b8; font-size: 12px; margin: 10px 0 0 0;">
+                    Livraison de diesel sur Tours et ses alentours
+                </p>
+            </div>
+        </div>
+        """
+        
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [customer['email']],
+            "subject": f"✅ Commande confirmée #{order['id'][:8].upper()} - Alia Refuel",
+            "html": html_content
+        }
+        
+        await asyncio.to_thread(resend.Emails.send, params)
+        logger.info(f"Customer confirmation email sent to {customer['email']}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send customer confirmation email: {str(e)}")
+
 # ==================== ORDER ROUTES ====================
 
 @api_router.post("/orders", response_model=OrderResponse)
@@ -541,9 +623,12 @@ async def confirm_payment(order_id: str, checkout_id: str = None, current_user: 
         }}
     )
     
-    # Send email notification
+    # Send email notification to admin
     updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     await send_order_notification_email(updated_order, current_user)
+    
+    # Send confirmation email to customer
+    await send_customer_confirmation_email(updated_order, current_user)
     
     return {"message": "Paiement confirmé", "status": "confirmed"}
 
