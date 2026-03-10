@@ -2,14 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
-import { Calendar } from "../components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -29,7 +26,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const STEPS = [
   { id: 1, title: "Quantité", icon: Fuel },
   { id: 2, title: "Adresse", icon: MapPin },
-  { id: 3, title: "Date", icon: CalendarIcon },
+  { id: 3, title: "Créneau", icon: Clock },
   { id: 4, title: "Confirmation", icon: Check }
 ];
 
@@ -45,13 +42,18 @@ const NewOrder = () => {
   const { user, getAuthHeader } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [pricing, setPricing] = useState({ price_per_liter: 1.85, delivery_fee: 15, minimum_quantity: 20 });
+  const [pricing, setPricing] = useState({ price_per_liter: 1.80, delivery_fee: 0, minimum_quantity: 20 });
+  
+  // Date de livraison = toujours demain
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
   const [formData, setFormData] = useState({
     quantity: 50,
     delivery_address: user?.address || "",
     delivery_city: user?.city || "",
     delivery_postal_code: user?.postal_code || "",
-    delivery_date: null,
+    delivery_date: tomorrow,
     delivery_time_slot: "",
     notes: ""
   });
@@ -103,7 +105,7 @@ const NewOrder = () => {
       case 2:
         return formData.delivery_address && formData.delivery_city && formData.delivery_postal_code;
       case 3:
-        return formData.delivery_date && formData.delivery_time_slot;
+        return formData.delivery_time_slot;
       default:
         return true;
     }
@@ -141,10 +143,6 @@ const NewOrder = () => {
       setLoading(false);
     }
   };
-
-  // Get min date (tomorrow)
-  const minDate = new Date();
-  minDate.setDate(minDate.getDate() + 1);
 
   return (
     <div className="max-w-3xl mx-auto" data-testid="new-order-page">
@@ -367,73 +365,44 @@ const NewOrder = () => {
             </div>
           )}
 
-          {/* Step 3: Date */}
+          {/* Step 3: Time Slot */}
           {currentStep === 3 && (
-            <div className="space-y-6" data-testid="step-date">
+            <div className="space-y-6" data-testid="step-timeslot">
               <div className="text-center mb-8">
                 <div className="w-20 h-20 bg-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CalendarIcon className="h-10 w-10 text-slate-900" />
+                  <Clock className="h-10 w-10 text-slate-900" />
                 </div>
                 <h2 
                   className="text-2xl font-bold text-slate-900"
                   style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
                 >
-                  QUAND ?
+                  CHOISISSEZ VOTRE CRÉNEAU
                 </h2>
-                <p className="text-slate-600 mt-2">Choisissez la date et le créneau horaire</p>
+                <p className="text-slate-600 mt-2">
+                  Livraison prévue <span className="font-semibold text-amber-600">demain {format(tomorrow, "d MMMM", { locale: fr })}</span>
+                </p>
               </div>
 
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-slate-700 font-medium">Date de livraison</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full h-12 justify-start text-left font-normal bg-slate-50 border-slate-200 hover:border-amber-500"
-                        data-testid="date-picker-trigger"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.delivery_date ? (
-                          format(formData.delivery_date, "EEEE d MMMM yyyy", { locale: fr })
-                        ) : (
-                          <span className="text-slate-500">Sélectionner une date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={formData.delivery_date}
-                        onSelect={(date) => setFormData({ ...formData, delivery_date: date })}
-                        disabled={(date) => date < minDate}
-                        initialFocus
-                        locale={fr}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-slate-700 font-medium">Créneau horaire</Label>
-                  <Select
-                    value={formData.delivery_time_slot}
-                    onValueChange={(value) => setFormData({ ...formData, delivery_time_slot: value })}
-                  >
-                    <SelectTrigger className="h-12 bg-slate-50 border-slate-200" data-testid="time-slot-select">
-                      <SelectValue placeholder="Sélectionner un créneau" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIME_SLOTS.map((slot) => (
-                        <SelectItem key={slot.value} value={slot.value}>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-slate-500" />
-                            {slot.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-4">
+                <Label className="text-slate-700 font-medium text-lg">Créneau horaire</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  {TIME_SLOTS.map((slot) => (
+                    <Button
+                      key={slot.value}
+                      type="button"
+                      variant={formData.delivery_time_slot === slot.value ? "default" : "outline"}
+                      onClick={() => setFormData({ ...formData, delivery_time_slot: slot.value })}
+                      className={`h-16 text-lg ${
+                        formData.delivery_time_slot === slot.value 
+                          ? "bg-amber-500 text-slate-900 hover:bg-amber-400 border-amber-500" 
+                          : "border-slate-200 hover:border-amber-500"
+                      }`}
+                      data-testid={`slot-${slot.value}`}
+                    >
+                      <Clock className="h-5 w-5 mr-2" />
+                      {slot.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -485,7 +454,7 @@ const NewOrder = () => {
                   <div>
                     <h4 className="font-bold text-slate-900">Date & Heure</h4>
                     <p className="text-slate-600">
-                      {formData.delivery_date && format(formData.delivery_date, "EEEE d MMMM yyyy", { locale: fr })}
+                      Demain - {format(tomorrow, "EEEE d MMMM yyyy", { locale: fr })}
                     </p>
                     <p className="text-slate-600">{formData.delivery_time_slot?.replace("-", " - ")}</p>
                   </div>

@@ -441,8 +441,8 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
     
     await db.orders.insert_one(order_doc)
     
-    # Send email notification to admin
-    await send_order_notification_email(order_doc, current_user)
+    # Ne pas envoyer d'email ici - sera envoyé après paiement
+    # await send_order_notification_email(order_doc, current_user)
     
     return OrderResponse(**order_doc)
 
