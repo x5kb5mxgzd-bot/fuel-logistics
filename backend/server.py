@@ -588,7 +588,7 @@ async def get_tomorrow_planning():
         "orders": orders
     }
 
-@api_router.post("/planning/send-email")
+@api_router.get("/planning/send-email")
 async def send_planning_email():
     """Send tomorrow's planning email to the driver"""
     tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
