@@ -15,6 +15,14 @@ import bcrypt
 import jwt
 import resend
 import requests as http_requests
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+import io
+import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -37,6 +45,17 @@ SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 SUMUP_API_KEY = os.environ.get('SUMUP_API_KEY', '')
 SUMUP_MERCHANT_CODE = os.environ.get('SUMUP_MERCHANT_CODE', '')
 SUMUP_API_URL = "https://api.sumup.com/v0.1"
+
+# Company Information for invoices
+COMPANY_INFO = {
+    "name": "ALIA REFUEL",
+    "siren": "987 944 527",
+    "address": "130 rue Francis Perrin",
+    "postal_code": "37260",
+    "city": "MONTS",
+    "phone": "06 09 88 32 50",
+    "email": "aliarefuel@gmail.com"
+}
 
 # Create the main app
 app = FastAPI(title="Alia Refuel API")
@@ -462,6 +481,10 @@ async def send_customer_confirmation_email(order: dict, customer: dict):
                         Contactez-nous au <strong>06 09 88 32 50</strong>
                     </p>
                 </div>
+                
+                <p style="font-size: 14px; color: #64748b; text-align: center;">
+                    📎 Votre facture est jointe à cet email.
+                </p>
             </div>
             
             <div style="background-color: #0F172A; padding: 20px; text-align: center;">
@@ -473,18 +496,213 @@ async def send_customer_confirmation_email(order: dict, customer: dict):
         </div>
         """
         
+        # Generate invoice PDF
+        invoice_pdf = await generate_invoice_pdf(order, customer)
+        invoice_filename = f"facture_alia_refuel_{order['id'][:8].upper()}.pdf"
+        
+        # Send to customer with invoice
         params = {
             "from": SENDER_EMAIL,
             "to": [customer['email']],
             "subject": f"✅ Commande confirmée #{order['id'][:8].upper()} - Alia Refuel",
-            "html": html_content
+            "html": html_content,
+            "attachments": [
+                {
+                    "filename": invoice_filename,
+                    "content": invoice_pdf
+                }
+            ]
         }
         
         await asyncio.to_thread(resend.Emails.send, params)
         logger.info(f"Customer confirmation email sent to {customer['email']}")
         
+        # Also send invoice to admin for accounting
+        admin_params = {
+            "from": SENDER_EMAIL,
+            "to": [ADMIN_EMAIL],
+            "subject": f"📄 Facture #{order['id'][:8].upper()} - {customer['full_name']} - {order['total_price']:.2f}€",
+            "html": f"""
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+                <h2>📄 Nouvelle facture pour la comptabilité</h2>
+                <p><strong>Client :</strong> {customer['full_name']}</p>
+                <p><strong>Montant :</strong> {order['total_price']:.2f}€</p>
+                <p><strong>Date :</strong> {order['delivery_date']}</p>
+                <p>La facture est jointe à cet email.</p>
+            </div>
+            """,
+            "attachments": [
+                {
+                    "filename": invoice_filename,
+                    "content": invoice_pdf
+                }
+            ]
+        }
+        
+        await asyncio.to_thread(resend.Emails.send, admin_params)
+        logger.info(f"Invoice sent to admin for accounting")
+        
     except Exception as e:
         logger.error(f"Failed to send customer confirmation email: {str(e)}")
+
+
+async def generate_invoice_pdf(order: dict, customer: dict) -> str:
+    """Generate a PDF invoice and return as base64 string"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*cm, bottomMargin=1*cm, leftMargin=1.5*cm, rightMargin=1.5*cm)
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#0F172A'), alignment=TA_CENTER)
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#64748b'))
+    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10)
+    bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold')
+    right_style = ParagraphStyle('Right', parent=styles['Normal'], fontSize=10, alignment=TA_RIGHT)
+    
+    elements = []
+    
+    # Header with company info
+    invoice_date = datetime.now().strftime("%d/%m/%Y")
+    invoice_number = f"FA-{order['id'][:8].upper()}"
+    
+    header_data = [
+        [
+            Paragraph(f"<b>{COMPANY_INFO['name']}</b><br/>{COMPANY_INFO['address']}<br/>{COMPANY_INFO['postal_code']} {COMPANY_INFO['city']}<br/>Tél: {COMPANY_INFO['phone']}<br/>Email: {COMPANY_INFO['email']}<br/>SIREN: {COMPANY_INFO['siren']}", header_style),
+            Paragraph(f"<b>FACTURE</b><br/><br/>N°: {invoice_number}<br/>Date: {invoice_date}", ParagraphStyle('RightHeader', parent=header_style, alignment=TA_RIGHT, fontSize=12))
+        ]
+    ]
+    
+    header_table = Table(header_data, colWidths=[10*cm, 7*cm])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 1*cm))
+    
+    # Client info box
+    client_info = f"""
+    <b>FACTURER À :</b><br/><br/>
+    <b>{customer['full_name']}</b><br/>
+    {customer.get('company_name', '') + '<br/>' if customer.get('company_name') else ''}
+    {customer['address']}<br/>
+    {customer['postal_code']} {customer['city']}<br/>
+    Tél: {customer['phone']}<br/>
+    Email: {customer['email']}
+    """
+    
+    client_table = Table([[Paragraph(client_info, normal_style)]], colWidths=[9*cm])
+    client_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0')),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+        ('PADDING', (0, 0), (-1, -1), 10),
+    ]))
+    elements.append(client_table)
+    elements.append(Spacer(1, 0.8*cm))
+    
+    # Delivery info
+    delivery_info = f"""
+    <b>LIVRAISON :</b> {order['delivery_date']} - Créneau {order['delivery_time_slot'].replace('-', 'h à ')}h<br/>
+    <b>ADRESSE :</b> {order['delivery_address']}, {order['delivery_postal_code']} {order['delivery_city']}
+    """
+    if order.get('notes'):
+        delivery_info += f"<br/><b>INSTRUCTIONS :</b> {order['notes']}"
+    
+    elements.append(Paragraph(delivery_info, normal_style))
+    elements.append(Spacer(1, 0.8*cm))
+    
+    # Invoice items table
+    items_data = [
+        ['Description', 'Quantité', 'Prix unitaire', 'Total HT']
+    ]
+    
+    # Diesel line
+    price_per_liter = order['price_fuel'] / order['quantity'] if order['quantity'] > 0 else DIESEL_PRICE_PER_LITER
+    items_data.append([
+        'Diesel (Gazole)',
+        f"{order['quantity']} L",
+        f"{price_per_liter:.2f} €",
+        f"{order['price_fuel']:.2f} €"
+    ])
+    
+    # Delivery line (if applicable)
+    if order['delivery_fee'] > 0:
+        items_data.append([
+            'Frais de livraison',
+            '1',
+            f"{order['delivery_fee']:.2f} €",
+            f"{order['delivery_fee']:.2f} €"
+        ])
+    else:
+        items_data.append([
+            'Frais de livraison',
+            '1',
+            'Offert',
+            '0.00 €'
+        ])
+    
+    items_table = Table(items_data, colWidths=[9*cm, 2.5*cm, 3*cm, 2.5*cm])
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0F172A')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('TOPPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f8fafc')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0')),
+        ('PADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(items_table)
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # Totals
+    totals_data = [
+        ['', '', 'Total HT:', f"{order['total_price']:.2f} €"],
+        ['', '', 'TVA (0%):', '0.00 €'],
+        ['', '', 'Total TTC:', f"{order['total_price']:.2f} €"],
+    ]
+    
+    totals_table = Table(totals_data, colWidths=[9*cm, 2.5*cm, 3*cm, 2.5*cm])
+    totals_table.setStyle(TableStyle([
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (2, 2), (-1, 2), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTSIZE', (2, 2), (-1, 2), 12),
+        ('BACKGROUND', (2, 2), (-1, 2), colors.HexColor('#F59E0B')),
+        ('PADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(totals_table)
+    elements.append(Spacer(1, 1*cm))
+    
+    # Payment info
+    payment_info = f"""
+    <b>PAIEMENT :</b> Carte bancaire (SumUp)<br/>
+    <b>STATUT :</b> Payé<br/>
+    <b>N° COMMANDE :</b> {order['id'][:8].upper()}
+    """
+    elements.append(Paragraph(payment_info, normal_style))
+    elements.append(Spacer(1, 1.5*cm))
+    
+    # Footer
+    footer_text = """
+    <i>TVA non applicable, article 293 B du CGI (auto-entrepreneur / micro-entreprise)</i><br/><br/>
+    Merci pour votre confiance !<br/>
+    ALIA REFUEL - Livraison de diesel sur Tours et ses alentours
+    """
+    footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#64748b'), alignment=TA_CENTER)
+    elements.append(Paragraph(footer_text, footer_style))
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Get PDF bytes and convert to base64
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    
+    return base64.b64encode(pdf_bytes).decode('utf-8')
 
 # ==================== ORDER ROUTES ====================
 
@@ -713,7 +931,7 @@ async def send_planning_email():
     """Send tomorrow's planning email to the driver"""
     tomorrow = datetime.now(timezone.utc).date() + timedelta(days=1)
     tomorrow_str = tomorrow.strftime("%Y-%m-%d")
-    tomorrow_formatted = tomorrow.strftime("%d/%m/%Y")
+    tomorrow_formatted = tomorrow.strftime("%A %d/%m/%Y").replace("Monday", "Lundi").replace("Tuesday", "Mardi").replace("Wednesday", "Mercredi").replace("Thursday", "Jeudi").replace("Friday", "Vendredi").replace("Saturday", "Samedi").replace("Sunday", "Dimanche")
     
     orders = await db.orders.find(
         {
@@ -740,76 +958,131 @@ async def send_planning_email():
     
     # Build email HTML
     orders_html = ""
+    order_num = 1
     for slot, slot_orders in sorted(by_slot.items()):
         slot_label = slot.replace("-", "h - ") + "h"
+        slot_liters = sum(o["quantity"] for o in slot_orders)
         orders_html += f"""
         <div style="margin-bottom: 30px;">
-            <h3 style="background-color: #F59E0B; color: #0F172A; padding: 10px 15px; margin: 0; border-radius: 8px 8px 0 0;">
-                🕐 {slot_label} ({len(slot_orders)} livraison{"s" if len(slot_orders) > 1 else ""})
-            </h3>
+            <div style="background-color: #0F172A; color: white; padding: 15px 20px; border-radius: 8px 8px 0 0;">
+                <table style="width: 100%;">
+                    <tr>
+                        <td><h3 style="color: #F59E0B; margin: 0;">🕐 CRÉNEAU {slot_label}</h3></td>
+                        <td style="text-align: right; color: #F59E0B; font-size: 18px;"><strong>{len(slot_orders)} livraison{"s" if len(slot_orders) > 1 else ""}</strong> - {slot_liters}L</td>
+                    </tr>
+                </table>
+            </div>
         """
         for order in slot_orders:
             # Get customer info
             user = await db.users.find_one({"id": order["user_id"]}, {"_id": 0})
             customer_name = user.get("full_name", "Client") if user else "Client"
             customer_phone = user.get("phone", "N/A") if user else "N/A"
+            customer_email = user.get("email", "N/A") if user else "N/A"
+            customer_type = "PRO" if user.get("user_type") == "pro" else "PARTICULIER"
+            company_name = user.get("company_name", "") if user else ""
             
             orders_html += f"""
-            <div style="background-color: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-top: none;">
-                <table style="width: 100%;">
+            <div style="background-color: #ffffff; padding: 20px; border: 2px solid #e2e8f0; border-top: none; {'border-bottom: 2px solid #F59E0B;' if order == slot_orders[-1] else ''}">
+                <table style="width: 100%; margin-bottom: 15px;">
                     <tr>
-                        <td style="width: 60%;">
-                            <strong style="font-size: 16px;">👤 {customer_name}</strong><br>
-                            <span style="color: #64748b;">📞 {customer_phone}</span>
+                        <td>
+                            <span style="background-color: #0F172A; color: white; padding: 3px 10px; border-radius: 4px; font-size: 12px;">LIVRAISON #{order_num}</span>
+                            <span style="background-color: {'#3b82f6' if customer_type == 'PRO' else '#22c55e'}; color: white; padding: 3px 10px; border-radius: 4px; font-size: 12px; margin-left: 5px;">{customer_type}</span>
                         </td>
                         <td style="text-align: right;">
-                            <strong style="font-size: 20px; color: #F59E0B;">⛽ {order['quantity']}L</strong><br>
-                            <span style="color: #0F172A; font-weight: bold;">{order['total_price']:.2f}€</span>
+                            <strong style="font-size: 24px; color: #F59E0B;">⛽ {order['quantity']}L</strong>
                         </td>
                     </tr>
                 </table>
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0;">
-                    <strong>📍 Adresse :</strong><br>
-                    {order['delivery_address']}<br>
-                    {order['delivery_postal_code']} {order['delivery_city']}
+                
+                <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #0F172A;">👤 INFORMATIONS CLIENT</h4>
+                    <table style="width: 100%;">
+                        <tr>
+                            <td style="padding: 5px 0; width: 50%;"><strong>Nom :</strong> {customer_name}</td>
+                            <td style="padding: 5px 0;"><strong>Type :</strong> {customer_type}</td>
+                        </tr>
+                        {f"<tr><td colspan='2' style='padding: 5px 0;'><strong>Entreprise :</strong> {company_name}</td></tr>" if company_name else ""}
+                        <tr>
+                            <td style="padding: 5px 0;"><strong style="font-size: 16px;">📞 {customer_phone}</strong></td>
+                            <td style="padding: 5px 0;"><strong>📧</strong> {customer_email}</td>
+                        </tr>
+                    </table>
                 </div>
-                {f"<div style='margin-top: 10px; padding: 10px; background-color: #fef3c7; border-radius: 4px;'><strong>📝 Note :</strong> {order['notes']}</div>" if order.get('notes') else ""}
+                
+                <div style="background-color: #0F172A; color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #F59E0B;">📍 ADRESSE DE LIVRAISON</h4>
+                    <p style="margin: 5px 0; font-size: 16px;"><strong>{order['delivery_address']}</strong></p>
+                    <p style="margin: 5px 0; font-size: 16px;"><strong>{order['delivery_postal_code']} {order['delivery_city']}</strong></p>
+                </div>
+                
+                <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #22c55e;">
+                    <h4 style="margin: 0 0 10px 0; color: #0F172A;">🛢️ COMMANDE</h4>
+                    <table style="width: 100%;">
+                        <tr>
+                            <td style="padding: 5px 0;"><strong>Quantité :</strong></td>
+                            <td style="padding: 5px 0; font-size: 18px; color: #F59E0B;"><strong>{order['quantity']} litres</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px 0;"><strong>Prix carburant :</strong></td>
+                            <td style="padding: 5px 0;">{order['price_fuel']:.2f}€</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px 0;"><strong>Livraison :</strong></td>
+                            <td style="padding: 5px 0;">{"Gratuite" if order['delivery_fee'] == 0 else f"{order['delivery_fee']:.2f}€"}</td>
+                        </tr>
+                        <tr style="border-top: 2px solid #22c55e;">
+                            <td style="padding: 10px 0;"><strong style="font-size: 16px;">TOTAL À ENCAISSER :</strong></td>
+                            <td style="padding: 10px 0; font-size: 20px; color: #0F172A;"><strong>{order['total_price']:.2f}€</strong></td>
+                        </tr>
+                    </table>
+                    <p style="margin: 10px 0 0 0; font-size: 12px; color: #64748b;">Paiement effectué par carte (SumUp) ✅</p>
+                </div>
+                
+                {f'''<div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #F59E0B;">
+                    <h4 style="margin: 0 0 10px 0; color: #92400e;">📝 COMMENTAIRES / INSTRUCTIONS</h4>
+                    <p style="margin: 0; color: #0F172A; font-size: 14px;">{order['notes']}</p>
+                </div>''' if order.get('notes') else ''}
             </div>
             """
+            order_num += 1
         orders_html += "</div>"
     
     html_content = f"""
-    <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
-        <div style="background-color: #0F172A; padding: 20px; text-align: center;">
-            <h1 style="color: #F59E0B; margin: 0;">📋 PLANNING LIVRAISONS</h1>
-            <p style="color: white; margin: 10px 0 0 0; font-size: 18px;">{tomorrow_formatted}</p>
+    <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+        <div style="background-color: #0F172A; padding: 25px; text-align: center;">
+            <h1 style="color: #F59E0B; margin: 0; font-size: 28px;">📋 PLANNING LIVRAISONS</h1>
+            <p style="color: white; margin: 10px 0 0 0; font-size: 20px;">{tomorrow_formatted}</p>
         </div>
         
-        <div style="background-color: #F59E0B; padding: 15px; text-align: center;">
-            <table style="width: 100%; color: #0F172A;">
+        <div style="background-color: #F59E0B; padding: 20px;">
+            <table style="width: 100%; color: #0F172A; text-align: center;">
                 <tr>
-                    <td style="text-align: center;">
-                        <strong style="font-size: 24px;">{len(orders)}</strong><br>
-                        <span>livraisons</span>
+                    <td>
+                        <strong style="font-size: 32px;">{len(orders)}</strong><br>
+                        <span style="font-size: 14px;">LIVRAISONS</span>
                     </td>
-                    <td style="text-align: center;">
-                        <strong style="font-size: 24px;">{total_liters}L</strong><br>
-                        <span>total</span>
+                    <td>
+                        <strong style="font-size: 32px;">{total_liters}L</strong><br>
+                        <span style="font-size: 14px;">TOTAL DIESEL</span>
                     </td>
-                    <td style="text-align: center;">
-                        <strong style="font-size: 24px;">{total_revenue:.2f}€</strong><br>
-                        <span>CA</span>
+                    <td>
+                        <strong style="font-size: 32px;">{total_revenue:.2f}€</strong><br>
+                        <span style="font-size: 14px;">CHIFFRE D'AFFAIRES</span>
                     </td>
                 </tr>
             </table>
         </div>
         
-        <div style="padding: 20px;">
+        <div style="padding: 25px; background-color: #f8fafc;">
             {orders_html}
         </div>
         
-        <div style="background-color: #0F172A; padding: 15px; text-align: center; color: #94a3b8; font-size: 12px;">
-            <p>Alia Refuel - Planning généré automatiquement</p>
+        <div style="background-color: #0F172A; padding: 20px; text-align: center; color: #94a3b8;">
+            <p style="margin: 0;"><strong style="color: #F59E0B;">ALIA REFUEL</strong></p>
+            <p style="margin: 5px 0; font-size: 12px;">Planning généré le {datetime.now().strftime("%d/%m/%Y à %H:%M")}</p>
+            <p style="margin: 5px 0; font-size: 12px;">130 rue Francis Perrin, 37260 MONTS - 06 09 88 32 50</p>
         </div>
     </div>
     """
