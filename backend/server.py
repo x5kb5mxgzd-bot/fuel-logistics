@@ -23,6 +23,10 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 import io
 import base64
+import aiosmtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -39,7 +43,13 @@ JWT_ALGORITHM = "HS256"
 # Resend Configuration
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'aliarefuel@gmail.com')
-SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+SENDER_EMAIL = "contact@refueltours.com"
+
+# OVH SMTP Configuration
+SMTP_HOST = "ssl0.ovh.net"
+SMTP_PORT = 587
+SMTP_USER = os.environ.get('SMTP_USER', 'contact@refueltours.com')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 
 # SumUp Configuration
 SUMUP_API_KEY = os.environ.get('SUMUP_API_KEY', '')
@@ -326,12 +336,52 @@ async def get_sumup_checkout_status(checkout_id: str) -> dict:
 
 # ==================== EMAIL HELPERS ====================
 
+async def send_email_smtp(to_email: str, subject: str, html_content: str, attachments: list = None):
+    """Send email via OVH SMTP"""
+    try:
+        message = MIMEMultipart()
+        message["From"] = SMTP_USER
+        message["To"] = to_email
+        message["Subject"] = subject
+        
+        # Add HTML content
+        message.attach(MIMEText(html_content, "html"))
+        
+        # Add attachments if any
+        if attachments:
+            for attachment in attachments:
+                part = MIMEApplication(base64.b64decode(attachment["content"]))
+                part.add_header("Content-Disposition", "attachment", filename=attachment["filename"])
+                message.attach(part)
+        
+        # Send via SMTP
+        await aiosmtplib.send(
+            message,
+            hostname=SMTP_HOST,
+            port=SMTP_PORT,
+            username=SMTP_USER,
+            password=SMTP_PASSWORD,
+            start_tls=True
+        )
+        
+        logger.info(f"Email sent via SMTP to {to_email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"SMTP email error: {str(e)}")
+        return False
+
+
 async def send_order_notification_email(order: dict, customer: dict):
     """Send email notification to admin when new order is placed"""
     try:
         # Format date nicely
         date_str = order['delivery_date']
         time_slot = order['delivery_time_slot'].replace('-', ' - ')
+        
+        # Generate invoice PDF
+        invoice_pdf = await generate_invoice_pdf(order, customer)
+        invoice_filename = f"facture_alia_refuel_{order['id'][:8].upper()}.pdf"
         
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -400,6 +450,10 @@ async def send_order_notification_email(order: dict, customer: dict):
                 </div>
                 
                 {f'<div style="background-color: #f1f5f9; padding: 15px; margin-top: 15px; border-radius: 8px; border-left: 4px solid #F59E0B;"><strong>📝 Instructions :</strong><p style="margin: 5px 0;">{order["notes"]}</p></div>' if order.get('notes') else ''}
+                
+                <div style="margin-top: 20px; padding: 15px; background-color: #dcfce7; border-radius: 8px;">
+                    <p style="margin: 0;">📎 <strong>Facture PDF jointe</strong> pour la comptabilité</p>
+                </div>
             </div>
             
             <div style="text-align: center; padding: 20px; color: #64748b; font-size: 12px;">
@@ -412,12 +466,18 @@ async def send_order_notification_email(order: dict, customer: dict):
             "from": SENDER_EMAIL,
             "to": [ADMIN_EMAIL],
             "subject": f"🛢️ Nouvelle commande #{order['id'][:8].upper()} - {order['quantity']}L - {customer['full_name']}",
-            "html": html_content
+            "html": html_content,
+            "attachments": [
+                {
+                    "filename": invoice_filename,
+                    "content": invoice_pdf
+                }
+            ]
         }
         
         # Send email in background (non-blocking)
         await asyncio.to_thread(resend.Emails.send, params)
-        logger.info(f"Email notification sent for order {order['id']}")
+        logger.info(f"Email notification with invoice sent for order {order['id']}")
         
     except Exception as e:
         logger.error(f"Failed to send email notification: {str(e)}")
@@ -612,18 +672,32 @@ async def generate_invoice_pdf(order: dict, customer: dict) -> str:
     elements.append(Paragraph(delivery_info, normal_style))
     elements.append(Spacer(1, 0.8*cm))
     
+    # Calculate prices with TVA
+    # Prix TTC -> HT = TTC / 1.20, TVA = TTC - HT
+    total_ttc = order['total_price']
+    total_ht = round(total_ttc / 1.20, 2)
+    tva_amount = round(total_ttc - total_ht, 2)
+    
+    fuel_ttc = order['price_fuel']
+    fuel_ht = round(fuel_ttc / 1.20, 2)
+    
+    delivery_ttc = order['delivery_fee']
+    delivery_ht = round(delivery_ttc / 1.20, 2) if delivery_ttc > 0 else 0
+    
+    price_per_liter_ttc = fuel_ttc / order['quantity'] if order['quantity'] > 0 else DIESEL_PRICE_PER_LITER
+    price_per_liter_ht = round(price_per_liter_ttc / 1.20, 2)
+    
     # Invoice items table
     items_data = [
-        ['Description', 'Quantité', 'Prix unitaire', 'Total HT']
+        ['Description', 'Quantité', 'Prix unitaire HT', 'Total HT']
     ]
     
     # Diesel line
-    price_per_liter = order['price_fuel'] / order['quantity'] if order['quantity'] > 0 else DIESEL_PRICE_PER_LITER
     items_data.append([
         'Diesel (Gazole)',
         f"{order['quantity']} L",
-        f"{price_per_liter:.2f} €",
-        f"{order['price_fuel']:.2f} €"
+        f"{price_per_liter_ht:.2f} €",
+        f"{fuel_ht:.2f} €"
     ])
     
     # Delivery line (if applicable)
@@ -631,8 +705,8 @@ async def generate_invoice_pdf(order: dict, customer: dict) -> str:
         items_data.append([
             'Frais de livraison',
             '1',
-            f"{order['delivery_fee']:.2f} €",
-            f"{order['delivery_fee']:.2f} €"
+            f"{delivery_ht:.2f} €",
+            f"{delivery_ht:.2f} €"
         ])
     else:
         items_data.append([
@@ -658,11 +732,11 @@ async def generate_invoice_pdf(order: dict, customer: dict) -> str:
     elements.append(items_table)
     elements.append(Spacer(1, 0.5*cm))
     
-    # Totals
+    # Totals with TVA
     totals_data = [
-        ['', '', 'Total HT:', f"{order['total_price']:.2f} €"],
-        ['', '', 'TVA (0%):', '0.00 €'],
-        ['', '', 'Total TTC:', f"{order['total_price']:.2f} €"],
+        ['', '', 'Total HT:', f"{total_ht:.2f} €"],
+        ['', '', 'TVA (20%):', f"{tva_amount:.2f} €"],
+        ['', '', 'Total TTC:', f"{total_ttc:.2f} €"],
     ]
     
     totals_table = Table(totals_data, colWidths=[9*cm, 2.5*cm, 3*cm, 2.5*cm])
@@ -688,7 +762,6 @@ async def generate_invoice_pdf(order: dict, customer: dict) -> str:
     
     # Footer
     footer_text = """
-    <i>TVA non applicable, article 293 B du CGI (auto-entrepreneur / micro-entreprise)</i><br/><br/>
     Merci pour votre confiance !<br/>
     ALIA REFUEL - Livraison de diesel sur Tours et ses alentours
     """
@@ -741,8 +814,7 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
     
     await db.orders.insert_one(order_doc)
     
-    # Ne pas envoyer d'email ici - sera envoyé après paiement
-    # await send_order_notification_email(order_doc, current_user)
+    # Commande créée - le paiement sera fait sur la page de paiement
     
     return OrderResponse(**order_doc)
 

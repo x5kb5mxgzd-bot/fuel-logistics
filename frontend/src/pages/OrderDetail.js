@@ -294,8 +294,8 @@ const OrderDetail = () => {
               </span>
             </div>
             <p className="text-sm text-slate-500 text-center mt-4">
-              Paiement à la livraison
-            </p>
+                Paiement sécurisé par carte bancaire
+              </p>
           </div>
         </CardContent>
       </Card>

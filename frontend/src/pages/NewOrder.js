@@ -56,6 +56,17 @@ const NewOrder = () => {
   maxDate.setDate(maxDate.getDate() + 7);
   maxDate.setHours(23, 59, 59, 999);
   
+  // Fonction pour vérifier si une date est un week-end
+  const isWeekend = (date) => {
+    const day = date.getDay();
+    return day === 0 || day === 6; // 0 = dimanche, 6 = samedi
+  };
+  
+  // Fonction pour désactiver les dates
+  const isDateDisabled = (date) => {
+    return date < minDate || date > maxDate || isWeekend(date);
+  };
+  
   const [formData, setFormData] = useState({
     quantity: 50,
     delivery_address: user?.address || "",
@@ -412,7 +423,7 @@ const NewOrder = () => {
                         mode="single"
                         selected={formData.delivery_date}
                         onSelect={(date) => setFormData({ ...formData, delivery_date: date })}
-                        disabled={(date) => date < minDate || date > maxDate}
+                        disabled={isDateDisabled}
                         initialFocus
                         locale={fr}
                       />
@@ -537,7 +548,7 @@ const NewOrder = () => {
               </div>
 
               <p className="text-center text-sm text-slate-500">
-                Paiement à la livraison (espèces ou carte bancaire)
+                Paiement sécurisé par carte bancaire
               </p>
             </div>
           )}

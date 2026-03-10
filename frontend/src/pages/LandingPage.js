@@ -237,7 +237,7 @@ const LandingPage = () => {
                   </li>
                   <li className="flex items-center gap-2 text-slate-800">
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
-                    Paiement à la livraison
+                    Paiement sécurisé en ligne
                   </li>
                   <li className="flex items-center gap-2 text-slate-800">
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
