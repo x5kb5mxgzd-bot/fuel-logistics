@@ -811,10 +811,13 @@ async def create_payment_checkout(order_id: str, return_url: str = None, current
     if order.get("payment_status") == "paid":
         raise HTTPException(status_code=400, detail="Cette commande est déjà payée")
     
-    # Create SumUp checkout
+    # Create SumUp checkout with unique reference
     try:
+        # Generate unique reference for each checkout attempt
+        unique_ref = f"{order_id[:8]}-{str(uuid.uuid4())[:8]}"
+        
         checkout_data = {
-            "checkout_reference": order_id,
+            "checkout_reference": unique_ref,
             "amount": order["total_price"],
             "currency": "EUR",
             "merchant_code": SUMUP_MERCHANT_CODE,
@@ -837,6 +840,13 @@ async def create_payment_checkout(order_id: str, return_url: str = None, current
         
         if response.status_code in [200, 201]:
             checkout = response.json()
+            
+            # Store checkout_id in order
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {"pending_checkout_id": checkout.get("id")}}
+            )
+            
             return {
                 "checkout_id": checkout.get("id"),
                 "order_id": order["id"],
