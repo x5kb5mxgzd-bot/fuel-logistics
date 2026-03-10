@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import bcrypt
 import jwt
 import resend
+import requests as http_requests
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -31,6 +32,11 @@ JWT_ALGORITHM = "HS256"
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'aliarefuel@gmail.com')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+
+# SumUp Configuration
+SUMUP_API_KEY = os.environ.get('SUMUP_API_KEY', '')
+SUMUP_MERCHANT_CODE = os.environ.get('SUMUP_MERCHANT_CODE', '')
+SUMUP_API_URL = "https://api.sumup.com/v0.1"
 
 # Create the main app
 app = FastAPI(title="Alia Refuel API")
@@ -110,12 +116,25 @@ class OrderResponse(BaseModel):
     delivery_date: str
     delivery_time_slot: str
     status: str
+    payment_status: Optional[str] = None
+    payment_method: Optional[str] = None
+    checkout_id: Optional[str] = None
     notes: Optional[str] = None
     created_at: str
     updated_at: str
 
 class OrderStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(pending|confirmed|in_delivery|delivered|cancelled)$")
+
+class CheckoutCreate(BaseModel):
+    order_id: str
+    return_url: str
+
+class CheckoutResponse(BaseModel):
+    checkout_id: str
+    checkout_url: str
+    amount: float
+    status: str
 
 # ==================== AUTH HELPERS ====================
 
@@ -227,6 +246,64 @@ ALLOWED_POSTAL_CODES_PREFIX = ["37"]  # Indre-et-Loire
 def is_delivery_zone_valid(postal_code: str) -> bool:
     """Check if postal code is in delivery zone"""
     return any(postal_code.startswith(prefix) for prefix in ALLOWED_POSTAL_CODES_PREFIX)
+
+# ==================== SUMUP PAYMENT HELPERS ====================
+
+async def create_sumup_checkout(order: dict, redirect_url: str) -> dict:
+    """Create a SumUp checkout for an order"""
+    try:
+        checkout_data = {
+            "checkout_reference": order["id"],
+            "amount": order["total_price"],
+            "currency": "EUR",
+            "merchant_code": SUMUP_MERCHANT_CODE,
+            "description": f"Alia Refuel - {order['quantity']}L Diesel",
+            "redirect_url": redirect_url
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {SUMUP_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        response = http_requests.post(
+            f"{SUMUP_API_URL}/checkouts",
+            json=checkout_data,
+            headers=headers
+        )
+        
+        if response.status_code in [200, 201]:
+            return response.json()
+        else:
+            logger.error(f"SumUp checkout creation failed: {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"SumUp checkout error: {str(e)}")
+        return None
+
+async def get_sumup_checkout_status(checkout_id: str) -> dict:
+    """Get the status of a SumUp checkout"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {SUMUP_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        response = http_requests.get(
+            f"{SUMUP_API_URL}/checkouts/{checkout_id}",
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logger.error(f"SumUp status check failed: {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"SumUp status error: {str(e)}")
+        return None
 
 # ==================== EMAIL HELPERS ====================
 
@@ -421,6 +498,62 @@ async def cancel_order(order_id: str, current_user: dict = Depends(get_current_u
     )
     
     return {"message": "Commande annulée avec succès"}
+
+# ==================== PAYMENT ROUTES ====================
+
+@api_router.post("/payments/create-checkout")
+async def create_payment_checkout(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Create a SumUp checkout for an order"""
+    order = await db.orders.find_one({"id": order_id, "user_id": current_user["id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Commande non trouvée")
+    
+    if order.get("payment_status") == "paid":
+        raise HTTPException(status_code=400, detail="Cette commande est déjà payée")
+    
+    # Return checkout info for frontend widget
+    return {
+        "order_id": order["id"],
+        "amount": order["total_price"],
+        "currency": "EUR",
+        "merchant_code": SUMUP_MERCHANT_CODE,
+        "description": f"Alia Refuel - {order['quantity']}L Diesel"
+    }
+
+@api_router.post("/payments/confirm/{order_id}")
+async def confirm_payment(order_id: str, checkout_id: str = None, current_user: dict = Depends(get_current_user)):
+    """Confirm payment after SumUp checkout completion"""
+    order = await db.orders.find_one({"id": order_id, "user_id": current_user["id"]})
+    if not order:
+        raise HTTPException(status_code=404, detail="Commande non trouvée")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Update order with payment info
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "payment_status": "paid",
+            "payment_method": "sumup",
+            "checkout_id": checkout_id,
+            "status": "confirmed",
+            "updated_at": now
+        }}
+    )
+    
+    # Send email notification
+    updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    await send_order_notification_email(updated_order, current_user)
+    
+    return {"message": "Paiement confirmé", "status": "confirmed"}
+
+@api_router.get("/payments/config")
+async def get_payment_config():
+    """Get SumUp configuration for frontend"""
+    return {
+        "merchant_code": SUMUP_MERCHANT_CODE,
+        "currency": "EUR"
+    }
 
 # ==================== STATS ROUTES ====================
 

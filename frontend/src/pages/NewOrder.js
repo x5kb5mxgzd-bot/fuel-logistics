@@ -129,9 +129,11 @@ const NewOrder = () => {
         delivery_date: format(formData.delivery_date, "yyyy-MM-dd")
       };
       
-      await axios.post(`${API}/orders`, orderData, { headers: getAuthHeader() });
-      toast.success("Commande créée avec succès !");
-      navigate("/dashboard/orders");
+      const response = await axios.post(`${API}/orders`, orderData, { headers: getAuthHeader() });
+      toast.success("Commande créée ! Redirection vers le paiement...");
+      
+      // Redirect to payment page
+      navigate(`/dashboard/payment/${response.data.id}`);
     } catch (error) {
       const message = error.response?.data?.detail || "Erreur lors de la création de la commande";
       toast.error(message);

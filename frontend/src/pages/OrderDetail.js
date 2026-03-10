@@ -28,7 +28,8 @@ import {
   XCircle,
   Phone,
   FileText,
-  Loader2
+  Loader2,
+  CreditCard
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -303,8 +304,28 @@ const OrderDetail = () => {
       <Card className="border-0 shadow-md">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4">
+            {/* Payment button for unpaid orders */}
+            {order.payment_status !== "paid" && !isCancelled && (
+              <Button
+                onClick={() => navigate(`/dashboard/payment/${order.id}`)}
+                className="flex-1 h-12 bg-green-600 text-white hover:bg-green-500 font-bold"
+                data-testid="pay-order-btn"
+              >
+                <CreditCard className="h-5 w-5 mr-2" />
+                Payer {order.total_price.toFixed(2)}€
+              </Button>
+            )}
+            
+            {/* Paid badge */}
+            {order.payment_status === "paid" && (
+              <div className="flex-1 h-12 bg-green-100 text-green-800 rounded-lg flex items-center justify-center font-semibold">
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Payé par carte
+              </div>
+            )}
+            
             <Button
-              variant="ghost"
+              variant="outline"
               className="flex-1 h-12 border-slate-200"
               onClick={() => window.open("tel:+33609883250")}
             >

@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import NewOrder from "./pages/NewOrder";
 import OrderHistory from "./pages/OrderHistory";
 import OrderDetail from "./pages/OrderDetail";
+import PaymentPage from "./pages/PaymentPage";
 import "@/App.css";
 
 const ProtectedRoute = ({ children }) => {
@@ -81,6 +82,7 @@ function App() {
             <Route path="new-order" element={<NewOrder />} />
             <Route path="orders" element={<OrderHistory />} />
             <Route path="orders/:id" element={<OrderDetail />} />
+            <Route path="payment/:orderId" element={<PaymentPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
