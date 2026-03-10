@@ -25,28 +25,51 @@ const PaymentPage = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [widgetLoaded, setWidgetLoaded] = useState(false);
+  const [checkoutId, setCheckoutId] = useState(null);
+  const [widgetMounted, setWidgetMounted] = useState(false);
 
   useEffect(() => {
-    const fetchOrder = async () => {
+    const fetchOrderAndCreateCheckout = async () => {
       try {
-        const res = await axios.get(`${API}/orders/${orderId}`, { headers: getAuthHeader() });
-        setOrder(res.data);
+        // Fetch order details
+        const orderRes = await axios.get(`${API}/orders/${orderId}`, { headers: getAuthHeader() });
+        setOrder(orderRes.data);
+        
+        // Check if already paid
+        if (orderRes.data.payment_status === "paid") {
+          setPaymentSuccess(true);
+          setLoading(false);
+          return;
+        }
         
         // Check if returning from payment
         const status = searchParams.get('status');
         if (status === 'success') {
           await confirmPayment();
+          setLoading(false);
+          return;
         }
+        
+        // Create SumUp checkout
+        const returnUrl = `${window.location.origin}/dashboard/payment/${orderId}?status=success`;
+        const checkoutRes = await axios.post(
+          `${API}/payments/create-checkout?order_id=${orderId}&return_url=${encodeURIComponent(returnUrl)}`,
+          {},
+          { headers: getAuthHeader() }
+        );
+        
+        setCheckoutId(checkoutRes.data.checkout_id);
+        
       } catch (error) {
-        console.error("Error fetching order:", error);
-        toast.error("Commande non trouvée");
+        console.error("Error:", error);
+        toast.error("Erreur lors du chargement de la commande");
         navigate("/dashboard/orders");
       } finally {
         setLoading(false);
       }
     };
-    fetchOrder();
+    
+    fetchOrderAndCreateCheckout();
   }, [orderId, getAuthHeader, navigate, searchParams]);
 
   useEffect(() => {
@@ -56,69 +79,64 @@ const PaymentPage = () => {
       script.id = 'sumup-card-sdk';
       script.src = 'https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js';
       script.async = true;
-      script.onload = () => setWidgetLoaded(true);
       document.body.appendChild(script);
-    } else {
-      setWidgetLoaded(true);
     }
   }, []);
 
   useEffect(() => {
-    if (widgetLoaded && order && !paymentSuccess && window.SumUpCard) {
-      initializeSumUpWidget();
+    // Mount SumUp widget when checkout is ready
+    if (checkoutId && order && !paymentSuccess && !widgetMounted && window.SumUpCard) {
+      mountSumUpWidget();
     }
-  }, [widgetLoaded, order, paymentSuccess]);
+  }, [checkoutId, order, paymentSuccess, widgetMounted]);
 
-  const initializeSumUpWidget = async () => {
-    try {
-      // Get payment config
-      const configRes = await axios.get(`${API}/payments/config`);
-      const config = configRes.data;
-
-      // Create checkout
-      const checkoutRes = await axios.post(
-        `${API}/payments/create-checkout?order_id=${orderId}`,
-        {},
-        { headers: getAuthHeader() }
-      );
-
-      const checkoutData = checkoutRes.data;
-
-      // Mount SumUp widget
-      if (window.SumUpCard && document.getElementById('sumup-card-widget')) {
-        window.SumUpCard.mount({
-          id: 'sumup-card-widget',
-          checkoutId: orderId,
-          merchantCode: config.merchant_code,
-          amount: checkoutData.amount,
-          currency: checkoutData.currency,
-          locale: 'fr-FR',
-          onResponse: async (type, body) => {
-            console.log('SumUp response:', type, body);
-            if (type === 'success') {
-              await confirmPayment(body.checkout_id);
-            } else if (type === 'error') {
-              toast.error(body.message || 'Erreur de paiement');
-            }
-          }
-        });
+  // Retry mounting widget if SDK loads after checkout
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (checkoutId && order && !paymentSuccess && !widgetMounted && window.SumUpCard) {
+        mountSumUpWidget();
       }
+    }, 500);
+    
+    return () => clearInterval(interval);
+  }, [checkoutId, order, paymentSuccess, widgetMounted]);
+
+  const mountSumUpWidget = () => {
+    try {
+      const container = document.getElementById('sumup-card-widget');
+      if (!container || widgetMounted) return;
+      
+      window.SumUpCard.mount({
+        id: 'sumup-card-widget',
+        checkoutId: checkoutId,
+        onResponse: async (type, body) => {
+          console.log('SumUp response:', type, body);
+          if (type === 'success') {
+            await confirmPayment(checkoutId);
+          } else if (type === 'error') {
+            toast.error(body?.message || 'Erreur de paiement');
+          }
+        },
+        onLoad: () => {
+          console.log('SumUp widget loaded');
+          setWidgetMounted(true);
+        }
+      });
     } catch (error) {
-      console.error('Error initializing SumUp:', error);
+      console.error('Error mounting SumUp widget:', error);
     }
   };
 
-  const confirmPayment = async (checkoutId = null) => {
+  const confirmPayment = async (checkoutIdParam = null) => {
     setProcessing(true);
     try {
       await axios.post(
-        `${API}/payments/confirm/${orderId}?checkout_id=${checkoutId || ''}`,
+        `${API}/payments/confirm/${orderId}?checkout_id=${checkoutIdParam || checkoutId || ''}`,
         {},
         { headers: getAuthHeader() }
       );
       setPaymentSuccess(true);
       toast.success("Paiement effectué avec succès !");
-      setTimeout(() => navigate("/dashboard/orders"), 3000);
     } catch (error) {
       console.error("Error confirming payment:", error);
       toast.error("Erreur lors de la confirmation du paiement");
@@ -127,16 +145,13 @@ const PaymentPage = () => {
     }
   };
 
-  const handleSimulatePayment = async () => {
-    // For testing - simulate successful payment
-    setProcessing(true);
-    await confirmPayment('test_checkout');
-  };
-
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-6">
-        <div className="h-96 bg-slate-200 rounded-xl animate-pulse"></div>
+        <div className="flex flex-col items-center justify-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-amber-500 mb-4" />
+          <p className="text-slate-600">Préparation du paiement...</p>
+        </div>
       </div>
     );
   }
@@ -208,23 +223,15 @@ const PaymentPage = () => {
         <CardContent>
           <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-slate-600">Diesel ({order?.quantity}L)</span>
+              <span className="text-slate-600">Diesel ({order?.quantity}L × 1,80€)</span>
               <span className="font-semibold">{order?.price_fuel?.toFixed(2)}€</span>
             </div>
-            {order?.delivery_fee > 0 && (
-              <div className="flex justify-between">
-                <span className="text-slate-600">Livraison</span>
-                <span className="font-semibold">{order?.delivery_fee?.toFixed(2)}€</span>
-              </div>
-            )}
-            {order?.delivery_fee === 0 && (
-              <div className="flex justify-between">
-                <span className="text-slate-600">Livraison</span>
-                <span className="font-semibold text-green-600">Gratuite</span>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <span className="text-slate-600">Livraison</span>
+              <span className="font-semibold text-green-600">Gratuite</span>
+            </div>
             <div className="border-t pt-3 flex justify-between">
-              <span className="text-lg font-bold">Total</span>
+              <span className="text-lg font-bold">Total à payer</span>
               <span 
                 className="text-2xl font-bold text-amber-500"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
@@ -241,48 +248,24 @@ const PaymentPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5 text-green-600" />
-            Paiement par carte
+            Paiement par carte bancaire
           </CardTitle>
         </CardHeader>
         <CardContent>
           {/* SumUp Card Widget Container */}
-          <div id="sumup-card-widget" className="min-h-[300px]">
-            {!widgetLoaded && (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+          <div id="sumup-card-widget" className="min-h-[350px]">
+            {!widgetMounted && (
+              <div className="flex flex-col items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-amber-500 mb-4" />
+                <p className="text-slate-500">Chargement du formulaire de paiement...</p>
               </div>
             )}
-          </div>
-
-          {/* Alternative: Manual Payment Button (for testing) */}
-          <div className="mt-6 pt-6 border-t">
-            <p className="text-sm text-slate-500 text-center mb-4">
-              Ou payez directement via SumUp
-            </p>
-            <Button
-              onClick={handleSimulatePayment}
-              disabled={processing}
-              className="w-full h-14 bg-green-600 text-white hover:bg-green-500 font-bold text-lg"
-              data-testid="pay-button"
-            >
-              {processing ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Traitement...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Payer {order?.total_price?.toFixed(2)}€
-                </div>
-              )}
-            </Button>
           </div>
 
           {/* Security Badge */}
           <div className="mt-6 flex items-center justify-center gap-2 text-slate-500">
             <Shield className="h-4 w-4" />
-            <span className="text-sm">Paiement sécurisé par SumUp</span>
+            <span className="text-sm">Paiement 100% sécurisé par SumUp</span>
           </div>
         </CardContent>
       </Card>

@@ -584,7 +584,7 @@ async def cancel_order(order_id: str, current_user: dict = Depends(get_current_u
 # ==================== PAYMENT ROUTES ====================
 
 @api_router.post("/payments/create-checkout")
-async def create_payment_checkout(order_id: str, current_user: dict = Depends(get_current_user)):
+async def create_payment_checkout(order_id: str, return_url: str = None, current_user: dict = Depends(get_current_user)):
     """Create a SumUp checkout for an order"""
     order = await db.orders.find_one({"id": order_id, "user_id": current_user["id"]}, {"_id": 0})
     if not order:
@@ -593,14 +593,49 @@ async def create_payment_checkout(order_id: str, current_user: dict = Depends(ge
     if order.get("payment_status") == "paid":
         raise HTTPException(status_code=400, detail="Cette commande est déjà payée")
     
-    # Return checkout info for frontend widget
-    return {
-        "order_id": order["id"],
-        "amount": order["total_price"],
-        "currency": "EUR",
-        "merchant_code": SUMUP_MERCHANT_CODE,
-        "description": f"Alia Refuel - {order['quantity']}L Diesel"
-    }
+    # Create SumUp checkout
+    try:
+        checkout_data = {
+            "checkout_reference": order_id,
+            "amount": order["total_price"],
+            "currency": "EUR",
+            "merchant_code": SUMUP_MERCHANT_CODE,
+            "description": f"Alia Refuel - {order['quantity']}L Diesel",
+        }
+        
+        if return_url:
+            checkout_data["return_url"] = return_url
+        
+        headers = {
+            "Authorization": f"Bearer {SUMUP_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        response = http_requests.post(
+            f"{SUMUP_API_URL}/checkouts",
+            json=checkout_data,
+            headers=headers
+        )
+        
+        if response.status_code in [200, 201]:
+            checkout = response.json()
+            return {
+                "checkout_id": checkout.get("id"),
+                "order_id": order["id"],
+                "amount": order["total_price"],
+                "currency": "EUR",
+                "merchant_code": SUMUP_MERCHANT_CODE,
+                "description": f"Alia Refuel - {order['quantity']}L Diesel"
+            }
+        else:
+            logger.error(f"SumUp checkout creation failed: {response.text}")
+            raise HTTPException(status_code=500, detail="Erreur lors de la création du paiement")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SumUp checkout error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création du paiement")
 
 @api_router.post("/payments/confirm/{order_id}")
 async def confirm_payment(order_id: str, checkout_id: str = None, current_user: dict = Depends(get_current_user)):
