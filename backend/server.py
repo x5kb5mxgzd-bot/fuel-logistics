@@ -37,13 +37,15 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', 'diesel-express-secret-key-2024')
+JWT_SECRET = os.environ.get('JWT_SECRET')
+if not JWT_SECRET:
+    JWT_SECRET = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 JWT_ALGORITHM = "HS256"
 
 # Resend Configuration
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'aliarefuel@gmail.com')
-SENDER_EMAIL = "contact@refueltours.com"
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'contact@refueltours.com')
 
 # OVH SMTP Configuration
 SMTP_HOST = "ssl0.ovh.net"
@@ -66,6 +68,9 @@ COMPANY_INFO = {
     "phone": "06 09 88 32 50",
     "email": "aliarefuel@gmail.com"
 }
+
+# Driver access code
+DRIVER_ACCESS_CODE = os.environ.get('DRIVER_ACCESS_CODE', 'alia2024')
 
 # Create the main app
 app = FastAPI(title="Alia Refuel API")
@@ -1038,6 +1043,11 @@ async def send_planning_email():
     total_liters = sum(o["quantity"] for o in orders)
     total_revenue = sum(o["total_price"] for o in orders)
     
+    # Batch load all users to avoid N+1 query
+    user_ids = list(set(o['user_id'] for o in orders))
+    users_list = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(len(user_ids))
+    users_dict = {u['id']: u for u in users_list}
+    
     # Build email HTML
     orders_html = ""
     order_num = 1
@@ -1056,8 +1066,8 @@ async def send_planning_email():
             </div>
         """
         for order in slot_orders:
-            # Get customer info
-            user = await db.users.find_one({"id": order["user_id"]}, {"_id": 0})
+            # Get customer info from pre-loaded dict
+            user = users_dict.get(order["user_id"])
             customer_name = user.get("full_name", "Client") if user else "Client"
             customer_phone = user.get("phone", "N/A") if user else "N/A"
             customer_email = user.get("email", "N/A") if user else "N/A"
@@ -1190,6 +1200,156 @@ async def send_planning_email():
     except Exception as e:
         logger.error(f"Failed to send planning email: {str(e)}")
         raise HTTPException(status_code=500, detail="Erreur lors de l'envoi de l'email")
+
+# ==================== DRIVER ROUTES ====================
+
+@api_router.post("/driver/login")
+async def driver_login(code: str):
+    """Verify driver access code"""
+    if code == DRIVER_ACCESS_CODE:
+        return {"success": True, "message": "Accès autorisé"}
+    raise HTTPException(status_code=401, detail="Code incorrect")
+
+@api_router.get("/driver/planning")
+async def get_driver_planning(code: str, date: str = None):
+    """Get planning for a specific date (driver access)"""
+    if code != DRIVER_ACCESS_CODE:
+        raise HTTPException(status_code=401, detail="Code incorrect")
+    
+    # Default to today
+    if not date:
+        target_date = datetime.now(timezone.utc).date()
+    else:
+        target_date = datetime.strptime(date, "%Y-%m-%d").date()
+    
+    target_str = target_date.strftime("%Y-%m-%d")
+    
+    orders = await db.orders.find(
+        {
+            "delivery_date": target_str,
+            "payment_status": "paid",
+            "status": {"$nin": ["cancelled"]}
+        },
+        {"_id": 0}
+    ).sort("delivery_time_slot", 1).to_list(100)
+    
+    # Batch load users
+    if orders:
+        user_ids = list(set(o['user_id'] for o in orders))
+        users_list = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(len(user_ids))
+        users_dict = {u['id']: u for u in users_list}
+        
+        # Add user info to orders
+        for order in orders:
+            user = users_dict.get(order['user_id'], {})
+            order['customer_name'] = user.get('full_name', 'Client')
+            order['customer_phone'] = user.get('phone', 'N/A')
+            order['customer_email'] = user.get('email', 'N/A')
+            order['customer_type'] = 'PRO' if user.get('user_type') == 'pro' else 'PARTICULIER'
+            order['company_name'] = user.get('company_name', '')
+    
+    # Group by time slot
+    by_slot = {}
+    for order in orders:
+        slot = order.get("delivery_time_slot", "Non défini")
+        if slot not in by_slot:
+            by_slot[slot] = []
+        by_slot[slot].append(order)
+    
+    return {
+        "date": target_str,
+        "total_orders": len(orders),
+        "total_liters": sum(o["quantity"] for o in orders),
+        "total_revenue": sum(o["total_price"] for o in orders),
+        "delivered_count": sum(1 for o in orders if o["status"] == "delivered"),
+        "pending_count": sum(1 for o in orders if o["status"] != "delivered"),
+        "orders_by_slot": by_slot,
+        "orders": orders
+    }
+
+@api_router.post("/driver/mark-delivered/{order_id}")
+async def mark_order_delivered(order_id: str, code: str):
+    """Mark an order as delivered (driver access)"""
+    if code != DRIVER_ACCESS_CODE:
+        raise HTTPException(status_code=401, detail="Code incorrect")
+    
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Commande non trouvée")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": "delivered", "delivered_at": now, "updated_at": now}}
+    )
+    
+    # Send delivery confirmation to customer
+    user = await db.users.find_one({"id": order["user_id"]}, {"_id": 0})
+    if user:
+        await send_delivery_confirmation_email(order, user)
+    
+    return {"success": True, "message": "Commande marquée comme livrée"}
+
+
+async def send_delivery_confirmation_email(order: dict, customer: dict):
+    """Send delivery confirmation email to customer"""
+    try:
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background-color: #22c55e; padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 28px;">✅ Livraison effectuée !</h1>
+            </div>
+            
+            <div style="padding: 30px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #334155;">
+                    Bonjour <strong>{customer['full_name']}</strong>,
+                </p>
+                <p style="font-size: 16px; color: #334155;">
+                    Votre commande de <strong>{order['quantity']} litres de diesel</strong> a été livrée avec succès.
+                </p>
+                
+                <div style="background-color: #f0fdf4; border-radius: 12px; padding: 25px; margin: 25px 0; border: 2px solid #22c55e;">
+                    <h2 style="color: #0F172A; margin-top: 0;">Récapitulatif</h2>
+                    <p><strong>Commande :</strong> #{order['id'][:8].upper()}</p>
+                    <p><strong>Quantité :</strong> {order['quantity']} litres</p>
+                    <p><strong>Total :</strong> {order['total_price']:.2f}€</p>
+                    <p><strong>Adresse :</strong> {order['delivery_address']}, {order['delivery_postal_code']} {order['delivery_city']}</p>
+                </div>
+                
+                <p style="font-size: 16px; color: #334155;">
+                    Merci pour votre confiance !
+                </p>
+                
+                <div style="background-color: #fef3c7; border-radius: 12px; padding: 20px; margin: 25px 0;">
+                    <p style="margin: 0; color: #92400e;">
+                        <strong>📞 Un problème ?</strong><br>
+                        Contactez-nous au <strong>06 09 88 32 50</strong>
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background-color: #0F172A; padding: 20px; text-align: center;">
+                <p style="color: #F59E0B; font-weight: bold; margin: 0;">ALIA REFUEL</p>
+                <p style="color: #94a3b8; font-size: 12px; margin: 10px 0 0 0;">
+                    Livraison de diesel sur Tours et ses alentours
+                </p>
+            </div>
+        </div>
+        """
+        
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [customer['email']],
+            "subject": f"✅ Livraison effectuée - Commande #{order['id'][:8].upper()} - Alia Refuel",
+            "html": html_content
+        }
+        
+        await asyncio.to_thread(resend.Emails.send, params)
+        logger.info(f"Delivery confirmation email sent to {customer['email']}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send delivery confirmation email: {str(e)}")
 
 # ==================== STATS ROUTES ====================
 

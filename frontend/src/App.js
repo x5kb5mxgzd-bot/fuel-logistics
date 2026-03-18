@@ -10,6 +10,7 @@ import NewOrder from "./pages/NewOrder";
 import OrderHistory from "./pages/OrderHistory";
 import OrderDetail from "./pages/OrderDetail";
 import PaymentPage from "./pages/PaymentPage";
+import DriverPage from "./pages/DriverPage";
 import "@/App.css";
 
 const ProtectedRoute = ({ children }) => {
@@ -54,6 +55,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/livreur" element={<DriverPage />} />
           <Route
             path="/login"
             element={
